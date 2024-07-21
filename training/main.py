@@ -46,10 +46,16 @@ from diffusers.utils import check_min_version, is_wandb_available
 from diffusers.utils.import_utils import is_xformers_available
 
 
-def parse_args(pretrained_model_name_or_path, pretrained_model_name_or_path_clip, emotion, train_data_dir, learnable_property, max_train_steps,
+def parse_args(device, pretrained_model_name_or_path, pretrained_model_name_or_path_clip, emotion, train_data_dir, learnable_property, max_train_steps,
                num_train_epochs, attr_rate, threshold, seed, emo_rate,
                learning_rate, output_dir, model, num_fc_layers, need_LN=False, need_ReLU=False, need_Dropout=False):
     parser = argparse.ArgumentParser(description="Simple example of a training script.")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default=device,
+        help="Device option",
+    )
     parser.add_argument(
         "--save_steps",
         type=int,
@@ -440,18 +446,26 @@ class TextualInversionDataset(Dataset):
         self.learnable_property = learnable_property
         self.image_paths = []
         self.attribute_list = []
+        print('dataset_____', learnable_property) # ['object', 'scene']
         if learnable_property != ["all"]:
             for folder in learnable_property:
                 self.data_root = os.path.join(data_root, folder)
                 with open(f'./dataset_balance/{folder}_norepeat.pkl', 'rb') as f:
                     tmp = pickle.load(f)
-                    self.image_paths.extend(tmp)
+                    # 修改到本地可训练的路径
+                    tmp_local = []
+                    for item in tmp:
+                        img_item = item.split('/')[-1]
+                        emo = img_item.split('_')[0]
+                        real_path = f'/root/autodl-tmp/dataset/EmoSet-118K-box/image/{emo}/{img_item}'
+                        tmp_local.append(real_path)
+                    self.image_paths.extend(tmp_local)
             for path in self.image_paths:
                 attribute = path.split('/')[-2].split(')')[-1].lower().replace(' ', '_')
                 if (attribute in self.attribute_list) is False:
                     self.attribute_list.append(attribute)
         else:
-            self.data_root = "EmoSet/image/"  # change it into your EmoSet file location
+            self.data_root = "/root/autodl-tmp/dataset/EmoSet-118K-box"  # change it into your EmoSet file location
             for root, _, file_path in os.walk(self.data_root):
                 for file in file_path:
                     if file.endswith("jpg"):
@@ -602,6 +616,7 @@ def main(args):
         "MLP": lambda args: MLP(args.num_fc_layers, args.need_ReLU, args.need_LN, args.need_Dropout),
         "SimpleMLP": lambda args: SimpleMLP(args.need_ReLU, args.need_Dropout),
     }
+    print('before mapper')
     mapper = model_dict[args.model](args)
 
     # Freeze vae and text_encoder
@@ -700,6 +715,9 @@ def main(args):
     # Scheduler and math around the number of training steps.
     overrode_max_train_steps = False
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
+    print('len(train_dataloader)', len(train_dataloader), args.gradient_accumulation_steps) # 132944 1
+    print(args.num_train_epochs, num_update_steps_per_epoch) # 1 132944
+
     if args.max_train_steps is None:
         args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
         overrode_max_train_steps = True
@@ -744,7 +762,7 @@ def main(args):
 
     # Train!
     total_batch_size = args.train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
-
+    print('total_batch_size', total_batch_size)
     global_step = 0
     first_epoch = 0
     # Potentially load in the weights and states from a previous save
@@ -796,7 +814,9 @@ def main(args):
     for epoch in range(first_epoch, args.num_train_epochs):
         encoder.eval()
         mapper.train()
+        print('c_ train_dataloader', epoch, len(train_dataloader)) # 132944
         for step, batch in enumerate(train_dataloader):
+            # print('c_, step', step)
             # Skip steps until we reach the resumed step
             if args.resume_from_checkpoint and epoch == first_epoch and step < resume_step:
                 if step % args.gradient_accumulation_steps == 0:
@@ -816,7 +836,7 @@ def main(args):
                     pred_emd.register_hook(change_grad)
 
                     # Change the embedding of new token
-                    token_embeds = text_encoder.module.get_input_embeddings().weight.data
+                    token_embeds = text_encoder.get_input_embeddings().weight.data
                     token_embeds[placeholder_token_ids] = pred_emd
 
                     # Convert images to latent space
@@ -863,7 +883,7 @@ def main(args):
                         index_attr = torch.tensor([index_attr]).detach().to(score.device)
                         loss_attr = fun_loss_attr(score, index_attr)
                     else:
-                        loss_attr = torch.tensor([0.0], requires_grad=True).to(mapper.device)
+                        loss_attr = torch.tensor([0.0], requires_grad=True).to(args.device)
                     if batch["attribute"][0] in attr_coefficient:
                         attr_rate = attr_coefficient[batch["attribute"][0]][label2idx[batch['emotion'][0]]].item()
                         if attr_rate < args.threshold:
@@ -882,13 +902,13 @@ def main(args):
                     loss_forward = (1 - attr_rate)*loss_reconstruction + args.attr_rate * attr_rate * loss_attr + args.emo_rate * loss_emo
 
                     accelerator.backward(loss_forward)
-                    grad_pseudo = text_encoder.module.get_input_embeddings().weight.grad[-1].detach().unsqueeze(0)
+                    grad_pseudo = text_encoder.get_input_embeddings().weight.grad[-1].detach().unsqueeze(0)
 
                     # fake loss in order to backward
                     loss_fake = torch.mean(pred_emd)
                     loss = 0 * loss_fake
                     accelerator.backward(loss)
-                    text_encoder.module.get_input_embeddings().weight.grad[-1] *= 0
+                    text_encoder.get_input_embeddings().weight.grad[-1] *= 0
 
                     optimizer.step()
                     lr_scheduler.step()
