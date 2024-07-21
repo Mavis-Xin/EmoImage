@@ -1,13 +1,16 @@
 from torchvision import models
 import torch.nn as nn
+import torch
 
 
 
 class BackBone(nn.Module):
     def __init__(self, ):
         super().__init__()
-        self.cnn = models.resnet50(pretrained=True)
-
+        print('111111', )
+        # self.cnn = models.resnet50(pretrained=True)
+        self.cnn = models.resnet50()
+        self.cnn.load_state_dict(torch.load('/root/autodl-tmp/model/resnet50-0676ba61.pth'))
         self.backbone = nn.Sequential(*list(self.cnn.children())[:-2])
         self.flaten = nn.Sequential(nn.AvgPool2d(kernel_size=7), nn.Flatten())
         self.fc_1 = nn.Linear(2048, 768)

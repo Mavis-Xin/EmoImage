@@ -46,7 +46,7 @@ from diffusers.utils import check_min_version, is_wandb_available
 from diffusers.utils.import_utils import is_xformers_available
 
 
-def parse_args(pretrained_model_name_or_path, emotion, train_data_dir, learnable_property, max_train_steps,
+def parse_args(pretrained_model_name_or_path, pretrained_model_name_or_path_clip, emotion, train_data_dir, learnable_property, max_train_steps,
                num_train_epochs, attr_rate, threshold, seed, emo_rate,
                learning_rate, output_dir, model, num_fc_layers, need_LN=False, need_ReLU=False, need_Dropout=False):
     parser = argparse.ArgumentParser(description="Simple example of a training script.")
@@ -114,6 +114,12 @@ def parse_args(pretrained_model_name_or_path, emotion, train_data_dir, learnable
         "--pretrained_model_name_or_path",
         type=str,
         default=pretrained_model_name_or_path,
+        help="Path to pretrained model or model identifier from huggingface.co/models.",
+    )
+    parser.add_argument(
+        "--pretrained_model_name_or_path_clip",
+        type=str,
+        default=pretrained_model_name_or_path_clip,
         help="Path to pretrained model or model identifier from huggingface.co/models.",
     )
     parser.add_argument(
@@ -353,7 +359,7 @@ def parse_args(pretrained_model_name_or_path, emotion, train_data_dir, learnable
 
 def generate_attr(processor, model, attribute_total):
     data_pro = processor(text=attribute_total, return_tensors="pt", padding=True).to(model.device)
-    data_pro = model.module.get_text_features(**data_pro)
+    data_pro = model.get_text_features(**data_pro)
     return data_pro
 
 
@@ -547,6 +553,7 @@ def save_pic(img, path):
 def main(args):
     accelerator_project_config = ProjectConfiguration(project_dir=args.output_dir, logging_dir=args.output_dir)
     # writer = SummaryWriter(log_dir=args.output_dir)
+    print('accelerator_project_config', accelerator_project_config)
     accelerator = Accelerator(
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         mixed_precision=args.mixed_precision,
@@ -576,8 +583,11 @@ def main(args):
     unet = UNet2DConditionModel.from_pretrained(
         args.pretrained_model_name_or_path, subfolder="unet", revision=args.revision
     )
-    model = CLIPModel.from_pretrained("model/clip-vit-large-patch14")
-    processor = CLIPProcessor.from_pretrained("model/clip-vit-large-patch14")
+    print('1111111, before clip-vit-large-patch14', args.pretrained_model_name_or_path_clip)
+
+    model = CLIPModel.from_pretrained(args.pretrained_model_name_or_path_clip)
+    processor = CLIPProcessor.from_pretrained(args.pretrained_model_name_or_path_clip)
+    print('1111111, after clip-vit-large-patch14')
 
     # Load image encoder and FC
     encoder = image_encoder()
@@ -782,7 +792,7 @@ def main(args):
     total_attr_embed = generate_attr(processor, model, total_attr).detach()
     attr_coefficient = get_coefficient()
     num = 0
-    linear_project = model.module.text_projection.to(weight_dtype)
+    linear_project = model.text_projection.to(weight_dtype)
     for epoch in range(first_epoch, args.num_train_epochs):
         encoder.eval()
         mapper.train()

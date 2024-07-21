@@ -11,7 +11,8 @@ need_ReLU: true
 num_fc_layers: 2
 num_train_epochs: 1
 output_dir: runs/test
-pretrained_model_name_or_path: /mnt/d/model/stable-diffusion-v1-5/
+pretrained_model_name_or_path: /root/autodl-tmp/model/stable-diffusion-v1-5/
+pretrained_model_name_or_path_clip: /root/autodl-tmp/model/clip-vit-large-patch14/
 seed: 520
 threshold: 0
-train_data_dir: /mnt/d/dataset/EmoSet/0103_split_to_folder/
+train_data_dir: /root/autodl-tmp/dataset/EmoSet/0103_split_to_folder/
