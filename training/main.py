@@ -446,7 +446,7 @@ class TextualInversionDataset(Dataset):
         self.learnable_property = learnable_property
         self.image_paths = []
         self.attribute_list = []
-        print('dataset_____', learnable_property) # ['object', 'scene']
+        # print('dataset_____', learnable_property) # ['object', 'scene']
         if learnable_property != ["all"]:
             for folder in learnable_property:
                 self.data_root = os.path.join(data_root, folder)
@@ -597,11 +597,11 @@ def main(args):
     unet = UNet2DConditionModel.from_pretrained(
         args.pretrained_model_name_or_path, subfolder="unet", revision=args.revision
     )
-    print('1111111, before clip-vit-large-patch14', args.pretrained_model_name_or_path_clip)
+    # print('1111111, before clip-vit-large-patch14', args.pretrained_model_name_or_path_clip)
 
     model = CLIPModel.from_pretrained(args.pretrained_model_name_or_path_clip)
     processor = CLIPProcessor.from_pretrained(args.pretrained_model_name_or_path_clip)
-    print('1111111, after clip-vit-large-patch14')
+    # print('1111111, after clip-vit-large-patch14')
 
     # Load image encoder and FC
     encoder = image_encoder()
@@ -616,7 +616,6 @@ def main(args):
         "MLP": lambda args: MLP(args.num_fc_layers, args.need_ReLU, args.need_LN, args.need_Dropout),
         "SimpleMLP": lambda args: SimpleMLP(args.need_ReLU, args.need_Dropout),
     }
-    print('before mapper')
     mapper = model_dict[args.model](args)
 
     # Freeze vae and text_encoder
@@ -763,7 +762,7 @@ def main(args):
 
     # Train!
     total_batch_size = args.train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
-    print('total_batch_size', total_batch_size)
+    # print('total_batch_size', total_batch_size) 1
     global_step = 0
     first_epoch = 0
     # Potentially load in the weights and states from a previous save
