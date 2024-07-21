@@ -46,7 +46,7 @@ from diffusers.utils import check_min_version, is_wandb_available
 from diffusers.utils.import_utils import is_xformers_available
 
 
-def parse_args(device, pretrained_model_name_or_path, pretrained_model_name_or_path_clip, emotion, train_data_dir, learnable_property, max_train_steps,
+def parse_args(device, pretrained_model_name_or_path, train_batch_size, pretrained_model_name_or_path_clip, emotion, train_data_dir, learnable_property, max_train_steps,
                num_train_epochs, attr_rate, threshold, seed, emo_rate,
                learning_rate, output_dir, model, num_fc_layers, need_LN=False, need_ReLU=False, need_Dropout=False):
     parser = argparse.ArgumentParser(description="Simple example of a training script.")
@@ -113,7 +113,7 @@ def parse_args(device, pretrained_model_name_or_path, pretrained_model_name_or_p
     parser.add_argument(
         "--num_vectors",
         type=int,
-        default=1,
+        default=1, # default 1
         help="How many textual inversion vectors shall be used to learn the concept.",
     )
     parser.add_argument(
@@ -182,7 +182,7 @@ def parse_args(device, pretrained_model_name_or_path, pretrained_model_name_or_p
         "--center_crop", action="store_true", help="Whether to center crop images before resizing to resolution."
     )
     parser.add_argument(
-        "--train_batch_size", type=int, default=1, help="Batch size (per device) for the training dataloader."
+        "--train_batch_size", type=int, default=train_batch_size, help="Batch size (per device) for the training dataloader."
     )
     parser.add_argument("--num_train_epochs", type=int, default=num_train_epochs)
     parser.add_argument(
@@ -656,6 +656,7 @@ def main(args):
     placeholder_token_ids = tokenizer.convert_tokens_to_ids(placeholder_tokens)
 
     # Resize the token embeddings as we are adding new special tokens to the tokenizer
+    # print('c_, len(tokenizer)', len(tokenizer)) # 49409
     text_encoder.resize_token_embeddings(len(tokenizer))
 
     # Initialise the newly added placeholder token with the embeddings of the initializer token
@@ -715,8 +716,8 @@ def main(args):
     # Scheduler and math around the number of training steps.
     overrode_max_train_steps = False
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
-    print('len(train_dataloader)', len(train_dataloader), args.gradient_accumulation_steps) # 132944 1
-    print(args.num_train_epochs, num_update_steps_per_epoch) # 1 132944
+    # print('len(train_dataloader)', len(train_dataloader), args.gradient_accumulation_steps) # 132944 1
+    # print(args.num_train_epochs, num_update_steps_per_epoch) # 1 132944
 
     if args.max_train_steps is None:
         args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
@@ -837,6 +838,8 @@ def main(args):
 
                     # Change the embedding of new token
                     token_embeds = text_encoder.get_input_embeddings().weight.data
+                    # print('c_, placeholder_token_ids', placeholder_token_ids) # [49408]
+                    # print('c_, shape', token_embeds[placeholder_token_ids].shape, pred_emd.shape) # torch.Size([1, 768]) torch.Size([32, 768])
                     token_embeds[placeholder_token_ids] = pred_emd
 
                     # Convert images to latent space
@@ -894,8 +897,15 @@ def main(args):
                     # emotion-guidance loss
                     fun_loss_emo = nn.CrossEntropyLoss()
                     pre_emo = classifier(project_semantic)
+                    # print('c_, batch["emotion"]', batch["emotion"])
                     index_emo = label2idx[batch["emotion"][0]]
+                    # index_emo = []
+                    # for ind in batch['emotion']:
+                    #     index_emo.append(label2idx[ind])
+                    # print('c_, index_emo', index_emo) # 4
                     index_emo = torch.tensor([index_emo]).detach().to(pre_emo.device)
+                    # print('c_, index_emo', index_emo) #
+                    # print('c_ pre_emo', pre_emo, index_emo)
                     loss_emo = fun_loss_emo(pre_emo, index_emo)
 
                     # assume that distance under threshold is the same object
