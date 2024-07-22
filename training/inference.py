@@ -43,12 +43,16 @@ def inference(arg, emotion):
     batch_size = len(prompt)
     num_picture = arg.num_picture
     repo_id = arg.repo_id
-    model = CLIPModel.from_pretrained("clip-vit-large-patch14").to(device)
-    processor = CLIPProcessor.from_pretrained("clip-vit-large-patch14")
-    vae = AutoencoderKL.from_pretrained(repo_id, subfolder="vae")
+    # print('c_ repo_id', repo_id) # stable-diffusion-v1-5/
+    pretrained_model_name_or_path_clip = '/root/autodl-tmp/model/clip-vit-large-patch14/'
+    pretrained_model_name_or_path = '/root/autodl-tmp/model/stable-diffusion-v1-5/'
+
+    model = CLIPModel.from_pretrained(pretrained_model_name_or_path_clip).to(device)
+    processor = CLIPProcessor.from_pretrained(pretrained_model_name_or_path_clip)
+    vae = AutoencoderKL.from_pretrained(pretrained_model_name_or_path, subfolder="vae")
     vae.to(device)
 
-    tokenizer = CLIPTokenizer.from_pretrained(repo_id, subfolder="tokenizer")
+    tokenizer = CLIPTokenizer.from_pretrained(pretrained_model_name_or_path, subfolder="tokenizer")
 
     class image_encoder(nn.Module):
         def __init__(self):
@@ -83,7 +87,7 @@ def inference(arg, emotion):
         except:
             img.save(f"{path}/{emotion}_0_{semantic}_{score:.2f}_v2.jpg")
 
-    text_encoder = CLIPTextModel.from_pretrained(repo_id, subfolder="text_encoder")
+    text_encoder = CLIPTextModel.from_pretrained(pretrained_model_name_or_path, subfolder="text_encoder")
     text_encoder.to(device)
     # Convert the initializer_token, placeholder_token to ids
     token_ids = tokenizer.encode("cat", add_special_tokens=False)
@@ -118,10 +122,10 @@ def inference(arg, emotion):
     uncond_embeddings = text_encoder(uncond_input.input_ids.to(device))[0]
     # text_embeddings = torch.cat([uncond_embeddings, text_embeddings])
 
-    unet = UNet2DConditionModel.from_pretrained(repo_id, subfolder="unet")
+    unet = UNet2DConditionModel.from_pretrained(pretrained_model_name_or_path, subfolder="unet")
     unet.to(device)
 
-    scheduler = UniPCMultistepScheduler.from_pretrained(repo_id, subfolder="scheduler")
+    scheduler = UniPCMultistepScheduler.from_pretrained(pretrained_model_name_or_path, subfolder="scheduler")
     scheduler.set_timesteps(num_inference_steps)
 
     for _ in range(num_picture):
@@ -319,8 +323,9 @@ if __name__ == "__main__":
         "runs/test",
     ]
     # choose which epoch do you want to generate
-    epochs = [0]
+    epochs = [3]
     device = "cuda:0"
+    print('c_ epochs', epochs)
 
     # emotion_classifier's weight
     weight = "weights/Clip_emotion_classifier/time_2023-11-12_03-29-best.pth"

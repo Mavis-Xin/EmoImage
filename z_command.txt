@@ -1,0 +1,11 @@
+新建: screen -S xxx
+查看所有: screen -ls 
+进入: screen -r xxx
+退出: Ctrl+a+d
+彻底退出: screen -s xxx -x quit
+
+accelerate launch training/main.py
+
+
+ps -ef | grep tensorboard | awk '{print $2}' | xargs kill -9 
+tensorboard --port 6007 --logdir /path/to/your/tf-logs/direction
