@@ -11,7 +11,7 @@ import random
 from torch.utils.data import Dataset
 from torchvision import transforms
 import pickle
-import torch.functional as F
+import torch.nn.functional as F
 
 
 @torch.no_grad()
@@ -70,6 +70,7 @@ def inference(arg, emotion):
         "SimpleMLP": lambda args: SimpleMLP(args.need_ReLU, args.need_Dropout),
     }
     mapper = model_dict[arg.mapper_name](arg)
+    print('c_ working_path', working_path)
     state = torch.load(os.path.join(working_path, "mapper.pth"))
     mapper.load_state_dict(state)
     mapper.eval()
@@ -182,8 +183,10 @@ def emo_cls(cur_dir, device, weight):
     classifier.load_state_dict(state)
     classifier.eval()
 
-    CLIPmodel = CLIPModel.from_pretrained("clip-vit-large-patch14").to(device)
-    processor = CLIPProcessor.from_pretrained("clip-vit-large-patch14")
+    pretrained_model_name_or_path_clip = '/root/autodl-tmp/model/clip-vit-large-patch14/'
+
+    CLIPmodel = CLIPModel.from_pretrained(pretrained_model_name_or_path_clip).to(device)
+    processor = CLIPProcessor.from_pretrained(pretrained_model_name_or_path_clip)
 
     class EmoDataset(Dataset):
         def __init__(self, data_root, processor):
@@ -299,7 +302,7 @@ def emo_cls(cur_dir, device, weight):
 def generate(cur_dir, device,model, num_fc_layers=1, need_LN=False, need_ReLU=False, need_Dropout=False, use_prompt=False):
     emotion_list = ["amusement", "excitement", "awe", "contentment", "fear", "disgust", "anger", "sadness"]
     parser = argparse.ArgumentParser()
-    parser.add_argument('--num_picture', type=int, default=10)
+    parser.add_argument('--num_picture', type=int, default=300)
     parser.add_argument('--repo_id', type=str, default="stable-diffusion-v1-5/")
     parser.add_argument('--device', type=str, default=device)
     #####################################################################################
@@ -323,7 +326,7 @@ if __name__ == "__main__":
         "runs/test",
     ]
     # choose which epoch do you want to generate
-    epochs = [3]
+    epochs = [6]
     device = "cuda:0"
     print('c_ epochs', epochs)
 
@@ -341,11 +344,14 @@ if __name__ == "__main__":
         try:
             for i in epochs:
                 output_dir = os.path.join(origin, str(i))
+                print('c_ output_dir', output_dir)
                 # use_prompt = True
                 # generate(output_dir, device, model, num_fc_layers, need_LN, need_ReLU, need_Dropout, use_prompt)
                 generate(output_dir, device, model, num_fc_layers, need_LN, need_ReLU, need_Dropout)
                 emo_cls(output_dir, device, weight)
         except:
+            print('--------------------------------------')
+            print('error happened')
             output_dir = origin
             # use_prompt = True
             # generate(output_dir, device, model, num_fc_layers, need_LN, need_ReLU, need_Dropout, use_prompt)

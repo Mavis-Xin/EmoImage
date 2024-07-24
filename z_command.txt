@@ -3,6 +3,7 @@
 进入: screen -r xxx
 退出: Ctrl+a+d
 彻底退出: screen -s xxx -x quit
+attached的session: screen -D  -r xxx
 
 accelerate launch training/main.py
 
