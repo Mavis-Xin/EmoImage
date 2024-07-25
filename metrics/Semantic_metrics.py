@@ -22,10 +22,12 @@ class EmoDataset(Dataset):
         self.image_paths = []
         self.data_root = data_root
         for root, _, file_path in os.walk(self.data_root):
+            print('c_ file_path: ', file_path)
             for file in file_path:
                 if file.endswith("jpg"):
                     self.image_paths.append(os.path.join(root, file))
         self._length = len(self.image_paths)
+        print('c_ _length:', self._length)
 
     def __len__(self):
         return self._length
@@ -62,9 +64,11 @@ def Semantic_diversity(wkdir, subdir, num_sample, device):
                     "anger","disgust","fear","sadness"]
     images_path = []
     curdir = os.path.join(wkdir, subdir)
-    model = CLIPModel.from_pretrained("/mnt/d/model/clip-vit-large-patch14").to(device)
-    processor = CLIPProcessor.from_pretrained("/mnt/d/model/clip-vit-large-patch14")
+    print(f'c_, curdir: {curdir}')
+    model = CLIPModel.from_pretrained("/root/autodl-tmp/model/clip-vit-large-patch14").to(device)
+    processor = CLIPProcessor.from_pretrained("/root/autodl-tmp/model/clip-vit-large-patch14")
     loss_fn_alex = lpips.LPIPS(net='alex')
+    print('c_, after loss_fn_alex')
     record = {"lpips_score":[], "difference_score":[], "mse_score":[]}
     # search one emotion's semantic_diversity
     for emotion in emotion_list:
@@ -117,27 +121,38 @@ def Semantic_diversity(wkdir, subdir, num_sample, device):
 @torch.no_grad()
 def Semantic_clarity(wkdir, subdir, device):
     cur_dir = os.path.join(wkdir, subdir)
+    print('c_ cur_dir: ', cur_dir)
     val_dataset = EmoDataset(cur_dir)
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=64, shuffle=False, pin_memory=True)
-    # picture_num = len(val_dataset)
+    picture_num = len(val_dataset)
+    print('c_ picture_num: ', picture_num)
     val_loader = tqdm(val_loader, file=sys.stdout)
 
     # 1. scene classifier
     arch = 'resnet50'
 
     # load the pre-trained weights
-    model_file = '%s_places365.pth.tar' % arch
+    model_file = '/root/autodl-tmp/model/%s_places365.pth.tar' % arch
+    # print('c_, model_file: ', model_file) # resnet50_places365.pth.tar
     if not os.access(model_file, os.W_OK):
-        weight_url = 'http://places2.csail.mit.edu/models_places365/' + model_file
+        weight_url = f'http://places2.csail.mit.edu/models_places365/{arch}_places365.pth.tar'
+        # print('c_ weight_url', weight_url)
         os.system('wget ' + weight_url)
+        # print('c_ after wget')
+    print('c_ before scene_classifier')
     scene_classifier = models.__dict__[arch](num_classes=365).to(device)
+    print('c_ after scene_classifier')
     checkpoint = torch.load(model_file, map_location=lambda storage, loc: storage)
     state_dict = {str.replace(k, 'module.', ''): v for k, v in checkpoint['state_dict'].items()}
     scene_classifier.load_state_dict(state_dict)
     scene_classifier.eval()
+    print('c_ before object_classifier')
 
     # 2.object classifier
-    object_classifier = models.resnet50(pretrained=True).to(device)
+    object_classifier = models.resnet50().to(device)
+    print('c_ after object_classifier')
+    object_classifier.load_state_dict(torch.load('/root/autodl-tmp/model/resnet50-0676ba61.pth'))
+
     object_classifier.eval()
 
     pred_list = []
@@ -157,9 +172,9 @@ def Semantic_clarity(wkdir, subdir, device):
         f.write(f"Semantic_Clarity_score: {clarity_score:.3f} \n")
 
 if __name__ == "__main__":
-    device = torch.device("cuda:5" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     num_sample = 10
-    file = "/mnt/d/Emo-generation/DB_5"
+    file = "/root/autodl-tmp/EmoImage/runs/test/6"
     sub_dir = 'img'
     Semantic_clarity(file, sub_dir, device)
     Semantic_diversity(file, sub_dir, num_sample, device)

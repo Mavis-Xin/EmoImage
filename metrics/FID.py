@@ -32,10 +32,14 @@ class ImageFolderDataset(Dataset):
 
     def _find_imgs(self, dir):
         img_paths = []
+        max_len = 300
         for root, _, fnames in sorted(os.walk(dir)):
             for fname in sorted(fnames):
+                if len(img_paths) > 300:
+                    continue
                 if self._is_valid_img_file(fname):
                     path = os.path.join(root, fname)
+                    # print('c_ path', path)
                     img_paths.append(path)
         return img_paths
 
@@ -69,19 +73,32 @@ class FIDRunner:
         if len(labels) == 0:
             real_labels = sorted(
                 [_ for _ in os.listdir(real_img_root) if os.path.isdir(os.path.join(real_img_root, _))])
-            print('c_ real_labels_1', real_labels)
+            # print('c_ real_labels_1', real_labels)
         else:
             real_labels = labels
         print('c_ real_labels_2', real_labels)
         self.real_label2fid = {label: self._init_fid() for label in real_labels}
+        # print('c_ real_label2fid', self.real_label2fid)
         self.fake_labels = sorted(
             [_ for _ in os.listdir(fake_img_root) if os.path.isdir(os.path.join(fake_img_root, _))])
+        print('c_ fake_labels', self.fake_labels)
 
     def _init_fid(self):
-        return FrechetInceptionDistance(normalize=True).to(self.device)
+        # print('c_ _init_fid')
+        # return FrechetInceptionDistance(pretrained='/root/autodl-tmp/model/weights-inception-2015-12-05-6726825d.pth', 
+        #                                 normalize=True).to(self.device)
+        local_model_path = '/root/autodl-tmp/model/weights-inception-2015-12-05-6726825d.pth'
+        fid = FrechetInceptionDistance(normalize=True).to(self.device)
+        # 加载本地的模型权重
+        state_dict = torch.load(local_model_path)
+        # 需要确保模型权重的键匹配torchmetrics库中的Inception模型所期望的键
+        fid.inception.load_state_dict(state_dict)
+        return fid
 
     def _load(self, label, fid, real=True):
+        # print('c_, _load', )
         real_or_fake = 'real' if real else 'fake'
+        # print('c_ real_or_fake', real_or_fake)
         img_root = self.real_img_root if real else self.fake_img_root
         npz_path = os.path.join(img_root, f'{label}_fid_{self.fid_num_features}.npz')
         try:
@@ -134,17 +151,23 @@ class FIDRunner:
         for label, fid in tqdm(self.real_label2fid.items(), desc='update real imgs'):
             if self._load(label, fid, real=True):
                 continue
+            # print('c_ after load', label)
             dataloader = DataLoader(
                 ImageFolderDataset(os.path.join(self.real_img_root, label)),
                 batch_size=256,
                 shuffle=False,
             )
+            # print('c_, after ImageFolderDataset')
+
             self._update(fid, dataloader, real=True)
+            # print('c_, after _update')
             self._save(label, fid, real=True)
+            # print('c_, after _save')
 
         # update the fake imgs
         for label in tqdm(self.fake_labels, desc='update fake imgs'):
             try:
+                print('c_', label)
                 fid = self.real_label2fid[label]
             except KeyError:
                 raise KeyError(f'The fake label {label} is not in the real labels.')
@@ -172,9 +195,14 @@ class FIDRunner:
         aggregated_fid.fake_features_num_samples += fid.fake_features_num_samples
 
     def _update(self, fid, dataloader, real):
+        all_len = len(dataloader)
+        num = 0
         for img in dataloader:
             img = img.to(self.device)
             fid.update(img, real=real)
+            num += 1
+            # print('c_, fid.update', num, all_len)
+
 
 
 if __name__ == '__main__':
@@ -187,7 +215,7 @@ if __name__ == '__main__':
     # fake_img_root = '/mnt/d/result/ti/emb_emotion'
     # runner = Runner('/mnt/d/data/EmoSet/emotion_scene/amusement', fake_img_root, device=device)
 
-    runner = FIDRunner('/mnt/d/dataset/EmoSet/image/',
-                       'runs/test',
+    runner = FIDRunner('/root/autodl-tmp/dataset/EmoSet-118K-box/image/',
+                       'runs/test/6/img',
                        labels=[])
     runner.run()
