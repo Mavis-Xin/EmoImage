@@ -69,8 +69,10 @@ class FIDRunner:
         if len(labels) == 0:
             real_labels = sorted(
                 [_ for _ in os.listdir(real_img_root) if os.path.isdir(os.path.join(real_img_root, _))])
+            print('c_ real_labels_1', real_labels)
         else:
             real_labels = labels
+        print('c_ real_labels_2', real_labels)
         self.real_label2fid = {label: self._init_fid() for label in real_labels}
         self.fake_labels = sorted(
             [_ for _ in os.listdir(fake_img_root) if os.path.isdir(os.path.join(fake_img_root, _))])
